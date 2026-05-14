@@ -167,3 +167,7 @@ int main(void) {
 		EndDrawing();
 	}
 }
+
+int WinMain(void) {
+	main();
+}
