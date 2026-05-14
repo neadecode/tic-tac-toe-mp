@@ -26,97 +26,79 @@ struct Square {
 	CellState state = CellState::MT;
 	Vector2 pos{};
 	AABB aabb{};
-	int size{};
-	bool selected = false;
-	Texture2D* xo = nullptr;
-	int px_s = 5;
-	Rectangle src{};
-	CellState plays = CellState::X;
-
-	Rectangle getTexSrc(CellState s) const {
+	int size	    = 0;
+	Texture2D* xo   = nullptr;
+	bool selected   = false;
+private:
+	int px = 5;
+	float x = 0.0f;   
+	float y = 0.0f;
+public:
+	Square() = default;
+	Square(CellState st, Vector2 p, AABB box, int sz, Texture2D* texture, bool sel): 
+		state(st), pos(p), aabb(box), size(sz), xo(texture), selected(sel)
+	{ x = pos.x; y = pos.y; }
+private:
+	Rectangle getPlayer(CellState s) const {
 		if (s == CellState::X) return { 0, 0, 32, 32 };
 		else if (s == CellState::O) return { 32, 0, 32, 32 };
 		return {};
 	}
-
-	void draw() {
-		auto [x, y] = pos;
-
-		src = getTexSrc(state);
-		
-		DrawRectangle(x + px_s, y + px_s, size - 2 * px_s, size - 2 * px_s, DARK_GRAY);
-		(!selected) ? drawNotSelected() : drawSelected();
-		drawPersistant();
+public:
+	void draw(CellState player) {
+		DrawRectangle(x + px, y + px, size - 2 * px, size - 2 * px, DARK_GRAY); //Bevel
+		drawSelection(player);
+		stamp();
 	}
-
-	void drawNotSelected() const {
-		auto [x, y] = pos;
+private:
+	void drawSelection(CellState player) const {
 		Vector2 mp = GetMousePosition();
+		bool hovering = (aabb.isPointInside(mp));
 
-		if (aabb.isPointInside(mp)) {
-			DrawRectangle(x + px_s, y + px_s, size - 3 * px_s, size - 3 * px_s, HOVER_BTN);
-			DrawTexturePro(
-				*xo,
-				getTexSrc(plays),
-				{ x + px_s, y+ px_s, (float)size- 2*px_s, (float)size- 2*px_s },
-				{ 0, 0 }, 
-				0.f, 
-				OPAQUE
-			);
+		Color innerColor = (hovering) ? HOVER_BTN : BG_BUTTON;
+		Rectangle playerPress = (selected) ?
+			Rectangle{ x + 1.5f * px, y + 1.5f * px, (float)size - 2.5f * px, (float)size - 2.5f * px } :
+			Rectangle{ x + px, y + px, (float)size - 2 * px, (float)size - 2 * px };
+
+		DrawRectangle(x + px, y + px, size - 3 * px, size - 3 * px, innerColor); //BG
+
+		if (!selected) { //Lines out
+			DrawRectangle(x, y, size - px, px, WHITE);
+			DrawRectangle(x, y, px, size - px, WHITE);
+			DrawRectangle(x, size + y - px, size, px, BLACK);
+			DrawRectangle(size + x - px, y, px, size, BLACK);
 		}
-		else {
-			DrawRectangle(x + px_s, y + px_s, size - 3 * px_s, size - 3 * px_s, BG_BUTTON);
+		if (hovering && !selected) { //Player out
+			DrawTexturePro(*xo, getPlayer(player), playerPress, { 0, 0 }, 0.f, OPAQUE);
 		}
-
-		DrawRectangle(x, y, size - px_s, px_s, WHITE);
-		DrawRectangle(x, y, px_s, size - px_s, WHITE);
-		DrawRectangle(x, size + y - px_s, size, px_s, BLACK);
-		DrawRectangle(size + x - px_s, y, px_s, size, BLACK);
-
+		if (selected) { //In
+			if (state == CellState::MT) DrawTexturePro(*xo, getPlayer(player), playerPress, { 0, 0 }, 0.f, OPAQUE);
+			DrawRectangle(x, size + y - px, size, px, WHITE);
+			DrawRectangle(size + x - px, y, px, size, WHITE);
+			DrawRectangle(x, y, size, px, BLACK);
+			DrawRectangle(x, y, px, size, BLACK);
+		} 
 	}
 
-	void drawSelected() const {
-		auto [x, y] = pos;
-
-		DrawRectangle(x + 2*px_s, y + 2*px_s, size - 3 * px_s, size - 3 * px_s, BG_BUTTON);
-		DrawTexturePro(
-			*xo,
-			getTexSrc(plays),
-			{ x + 2* px_s, y + 2* px_s, (float)size - 3 * px_s, (float)size - 3 * px_s },
-			{ 0, 0 },
-			0.f,
-			OPAQUE
-		);
-
-		DrawRectangle(x, size + y - px_s, size, px_s, WHITE);
-		DrawRectangle(size + x - px_s, y, px_s, size, WHITE);
-		DrawRectangle(x, y, size, px_s, BLACK);
-		DrawRectangle(x, y, px_s, size, BLACK);
-	}
-
-	void drawPersistant() const {
-		auto [x, y] = pos;
-		DrawTexturePro(
-			*xo, src,
-			{ x + 2 * px_s, y + 2 * px_s, (float)size - 3 * px_s, (float)size - 3 * px_s },
-			{ 0, 0 },
-			0.f,
-			HOVER_BTN
-		);
+	//Only works when the getPlayer returns a valid source. Not Rectangle{}.
+	void stamp() {
+		DrawTexturePro(*xo, getPlayer(this->state), 
+			{ x + 1.5f * px, y + 1.5f * px, (float)size - 2.5f * px, (float)size - 2.5f * px },
+			{ 0, 0 }, 0.f, HOVER_BTN);
 	}
 };
 
 template<typename S, int _width, int _height>
-struct GridManager {
+class GridManager {
+public:
 	static inline CellState currentPlayer = CellState::X;
 	static inline Texture2D xo{};
 	static inline int squareSize{};
 	static inline Vector2 padding{};
 	static const inline int gridSize = _width * _height;
 
-
 	static inline std::array<S, gridSize> shapes;
-	
+
 	static void setup(int sqrSize, Vector2 _padding) {
 		squareSize = sqrSize;
 		padding = _padding;
@@ -131,7 +113,7 @@ struct GridManager {
 
 		float startX = (screenW - gridW) / 2.0f;
 		float startY = (screenH - gridH) / 2.0f;
-
+#pragma region Initializing shapes from position
 		for (int i = 0; i < gridSize; ++i) {
 			int gridX = i % _width;
 			int gridY = i / _width;
@@ -142,14 +124,14 @@ struct GridManager {
 			Vector2 pos = { x, y };
 			AABB bb = { { x, y }, { x + sqrSize, y + sqrSize } };
 
-			shapes[i] = S{ CellState::MT, pos, bb, sqrSize, false, &xo};
-			shapes[i].plays = currentPlayer;
+			shapes[i] = S{CellState::MT, pos, bb, sqrSize, &xo, false};
 		}
+#pragma endregion
 	}
 
-	static void draw() { for (auto& shape : shapes) { shape.draw(); } }
+	static void draw(CellState player) { for (auto& shape : shapes) { shape.draw(player); } }
 	
-	static void handleClick(Vector2 mp) {
+	static void update(Vector2 mp) {
 		for (auto& shape : shapes) {
 			if (shape.state == CellState::MT) {
 				shape.selected = (shape.aabb.isPointInside(mp) && IsMouseButtonDown(MOUSE_BUTTON_LEFT));
@@ -157,12 +139,9 @@ struct GridManager {
 			if (shape.aabb.isPointInside(mp) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && shape.state == CellState::MT) {
 				shape.state = currentPlayer;
 				shape.selected = true;
-
 				currentPlayer = (currentPlayer == CellState::X) ? CellState::O : CellState::X;
-				shape.plays = currentPlayer;
 			}
 		}
-		
 	}
 private:
 	GridManager() = default;
@@ -183,8 +162,8 @@ int main(void) {
 		ClearBackground(SKYBLUE);
 
 		Vector2 mp = GetMousePosition();
-		Grid::handleClick(mp);
-		Grid::draw();
+		Grid::update(mp);
+		Grid::draw(Grid::currentPlayer);
 		EndDrawing();
 	}
 }
